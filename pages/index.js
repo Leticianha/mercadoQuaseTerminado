@@ -75,9 +75,6 @@ export default function Interface() {
     const navigation = useNavigation();
 
 
-    // fonte
-
-
 
     // valor alvo - deixar fixo o R$
     const handleChangeText = (text) => {

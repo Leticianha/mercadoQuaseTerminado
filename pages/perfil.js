@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, StatusBar, Image, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, StatusBar, Image, Alert, Platform, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as Animatable from 'react-native-animatable';
 
 export default function Perfil() {
     const [user, setUser] = useState({ email: '', usuario: '', nome: '', telefone: '', photo: null });
@@ -38,20 +40,31 @@ export default function Perfil() {
         const getUser = async () => {
             const userData = await AsyncStorage.getItem('user');
             if (userData) {
-                const { email, usuario, nome, telefone, photo } = JSON.parse(userData);
-                setUser({ email, usuario, nome, telefone, photo });
+                const { email, usuario, nome, telefone } = JSON.parse(userData);
+                const userPhotoData = await AsyncStorage.getItem(email);
+                const userPhoto = userPhotoData ? JSON.parse(userPhotoData).photo : null;
+                setUser({ email, usuario, nome, telefone, photo: userPhoto });
             }
         };
         getUser();
     }, []);
 
+    useEffect(() => {
+        const resetPhotoForGuest = () => {
+            if (isGuest) {
+                setUser(prevUser => ({ ...prevUser, photo: null }));
+            }
+        };
+
+        resetPhotoForGuest();
+    }, [isGuest]);
+
     const openLink = () => {
-        Linking.openURL('https://www.seulink.com');
+        Linking.openURL('https://www.tendaatacado.com.br/institucional/nossas-ofertas');
     };
 
     const pickImage = async () => {
         if (Platform.OS === 'web') {
-            // Use HTML input element for web
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/*';
@@ -61,12 +74,11 @@ export default function Perfil() {
                     const uri = URL.createObjectURL(file);
                     const newUser = { ...user, photo: uri };
                     setUser(newUser);
-                    await AsyncStorage.setItem('user', JSON.stringify(newUser));
+                    await AsyncStorage.setItem(user.email, JSON.stringify(newUser));
                 }
             };
             input.click();
         } else {
-            // Use expo-image-picker for native
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
                 Alert.alert('Permissão necessária', 'Precisamos de permissão para acessar suas fotos.');
@@ -81,85 +93,95 @@ export default function Perfil() {
             });
 
             if (!result.canceled) {
-                const newUser = { ...user, photo: result.uri };
+                const newUser = { ...user, photo: result.assets[0].uri };
                 setUser(newUser);
-                await AsyncStorage.setItem('user', JSON.stringify(newUser));
+                await AsyncStorage.setItem(user.email, JSON.stringify(newUser));
             }
         }
     };
 
+    const logout = async () => {
+        await AsyncStorage.removeItem('user');
+        setUser({ email: '', usuario: '', nome: '', telefone: '', photo: null });
+        navigation.navigate('inicio');
+    };
+
     return (
-        <ScrollView>
-            {/* Configurar a cor da barra de status */}
-            <StatusBar backgroundColor="#305BCC" barStyle="light-content" />
-            <View style={styles.container} onLayout={onLayoutRootView}>
-                <Pressable onPress={pickImage}>
-                    {user.photo ? (
-                        <Image source={{ uri: user.photo }} style={styles.imageUser} />
-                    ) : (
-                        <View style={styles.imageUser}>
-                            <Ionicons name="camera-outline" size={40} color="#fff" />
-                        </View>
-                    )}
-                </Pressable>
-                {isGuest ? (
-                    <Text style={styles.info1}>Você está logado como convidado.</Text>
-                ) : (
-                    <>
-                        <View style={styles.infoPega}>
-                            <Text style={styles.info1}>{user.nome}</Text>
-                            <Text style={styles.info2}>{user.email}</Text>
-                        </View>
-                    </>
-                )}
-                <Pressable style={styles.botao} onPress={() => navigation.navigate('login')}>
-                    <Text style={styles.sair}>Sair</Text>
-                </Pressable>
-                <View style={styles.conteudo}>
-                    <View style={styles.azul}>
-                        <View style={styles.containerInfo}>
-                            <Text style={styles.text1}>Nome:</Text>
-                            {isGuest ? (
-                                <Text style={styles.info1}>Sem informação</Text>
+        <SafeAreaView style={{ flex: 1 }}>
+            <ScrollView style={styles.scrollView}>
+                <Animatable.View delay={600} animation='fadeInUp' style={styles.tudo}>
+                    <View style={styles.container} onLayout={onLayoutRootView}>
+                        <Pressable onPress={pickImage}>
+                            {user.photo ? (
+                                <Image source={{ uri: user.photo }} style={styles.imageUser} />
                             ) : (
-                                <Text style={styles.text2}>{user.nome}</Text>
+                                <View style={styles.imageUser}>
+                                    <Ionicons name="camera-outline" size={40} color="#fff" />
+                                </View>
                             )}
-                        </View>
-                        <View style={styles.containerInfo}>
-                            <Text style={styles.text1}>Telefone:</Text>
-                            {isGuest ? (
-                                <Text style={styles.info1}>Sem informação</Text>
-                            ) : (
-                                <Text style={styles.text2}>{user.telefone}</Text>
-                            )}
+                        </Pressable>
+                        {isGuest ? (
+                            <Text style={styles.info1}>Você está logado como convidado.</Text>
+                        ) : (
+                            <>
+                                <View style={styles.infoPega}>
+                                    <Text style={styles.info1}>{user.nome}</Text>
+                                    <Text style={styles.info2}>{user.email}</Text>
+                                </View>
+                            </>
+                        )}
+                        <Pressable style={styles.botao} onPress={logout}>
+                            <Text style={styles.sair}>Sair</Text>
+                        </Pressable>
+                        <View style={styles.conteudo}>
+                            <View style={styles.azul}>
+                                <View style={styles.containerInfo}>
+                                    <Text style={styles.text1}>Nome:</Text>
+                                    {isGuest ? (
+                                        <Text style={styles.info1}>Sem informação</Text>
+                                    ) : (
+                                        <Text style={styles.text2}>{user.nome}</Text>
+                                    )}
+                                </View>
+                                <View style={styles.containerInfo}>
+                                    <Text style={styles.text1}>Telefone:</Text>
+                                    {isGuest ? (
+                                        <Text style={styles.info1}>Sem informação</Text>
+                                    ) : (
+                                        <Text style={styles.text2}>{user.telefone}</Text>
+                                    )}
+                                </View>
+                            </View>
+                            <View style={styles.linha}></View>
+                            <View style={styles.containerCont2}>
+                                <Pressable style={styles.botao} onPress={() => navigation.navigate('index')}>
+                                    <View style={styles.cont2}>
+                                        <Ionicons name="list" size={25} style={styles.iconToggle2} />
+                                        <Text style={styles.textCont2}>Criar lista</Text>
+                                        <Ionicons name="chevron-forward-outline" size={25} style={styles.iconToggle3} />
+                                    </View>
+                                </Pressable>
+                                <Pressable onPress={openLink} style={({ pressed }) => [
+                                    { backgroundColor: pressed ? 'rgba(0, 0, 0, 0.1)' : 'transparent' },
+                                    styles.linkContainer
+                                ]}>
+                                    <View style={styles.cont2}>
+                                        <Ionicons name="bag-handle-outline" size={25} style={styles.iconToggle2} />
+                                        <Text style={styles.textCont2}>Promoções</Text>
+                                        <Ionicons name="chevron-forward-outline" size={25} style={styles.iconToggle3} />
+                                    </View>
+                                </Pressable>
+                            </View>
+                            <Pressable onPress={() => navigation.goBack()} style={styles.buttonVoltar}>
+                                <Text style={styles.buttonText}>Voltar</Text>
+                            </Pressable>
                         </View>
                     </View>
-                    <View style={styles.linha}></View>
-                    <View style={styles.containerCont2}>
-                        <Pressable style={styles.botao} onPress={() => navigation.navigate('listasCriadas')}>
-                            <View style={styles.cont2}>
-                                <Ionicons name="list" size={25} style={styles.iconToggle2} />
-                                <Text style={styles.textCont2}>Listas Criadas</Text>
-                                <Ionicons name="chevron-forward-outline" size={25} style={styles.iconToggle3} />
-                            </View>
-                        </Pressable>
-                        <Pressable onPress={openLink} style={({ pressed }) => [
-                            { backgroundColor: pressed ? 'rgba(0, 0, 0, 0.1)' : 'transparent' },
-                            styles.linkContainer
-                        ]}>
-                            <View style={styles.cont2}>
-                                <Ionicons name="bag-handle-outline" size={25} style={styles.iconToggle2} />
-                                <Text style={styles.textCont2}>Promoções</Text>
-                                <Ionicons name="chevron-forward-outline" size={25} style={styles.iconToggle3} />
-                            </View>
-                        </Pressable>
-                    </View>
-                    <Pressable onPress={() => navigation.goBack()} style={styles.buttonVoltar}>
-                        <Text style={styles.buttonText}>Voltar</Text>
-                    </Pressable>
-                </View>
-            </View>
-        </ScrollView>
+                </Animatable.View>
+
+                <StatusBar backgroundColor="#305BCC" barStyle="light-content" />
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
@@ -175,7 +197,7 @@ const styles = StyleSheet.create({
         width: 70,
         height: 70,
         borderRadius: 35,
-        backgroundColor: '#FF6347',
+        backgroundColor: '#F6282A',
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 40,
@@ -197,13 +219,13 @@ const styles = StyleSheet.create({
     },
     containerInfo: {
         width: 150,
-        paddingLeft: 10,
-        margin: 20,
+        padding: 20,
         backgroundColor: '#305BCC',
         borderRadius: 30,
-        height: 100,
+        minHeight: 100,
         marginTop: 20,
-        justifyContent: 'center'
+        justifyContent: 'center',
+        marginLeft: 10
     },
     text2: {
         fontSize: 30,
@@ -225,7 +247,6 @@ const styles = StyleSheet.create({
     linha: {
         width: 1,
         height: 30,
-        margin: 5,
         backgroundColor: '#fff'
     },
     text1: {
@@ -278,7 +299,7 @@ const styles = StyleSheet.create({
         width: '102%',
     },
     buttonVoltar: {
-        backgroundColor: '#FF6347',
+        backgroundColor: '#F6282A',
         padding: 10,
         alignItems: 'center',
         borderRadius: 25,
